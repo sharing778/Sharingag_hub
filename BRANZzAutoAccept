@@ -14,12 +14,6 @@ local TARGET_ID          = 9929561794        -- ID Roblox do alvo
 local DELAY_STEP         = 1        -- delay entre adds
 local TRADE_CYCLE_DELAY  = 2        -- delay entre invites
 
--- GUIDs do jogo (não mude)
-local INVITE_GUID = "afb005f9-6e81-4e0a-8bb0-3555938a9658"
-local SELECT_GUID = "6b5f15fb-5cb9-4d07-a031-bbff8e641eda"
-local READY_GUID  = "d73acf93-6f32-44df-b813-0f6b32c7afd9"
-local ACCEPT_GUID = "918ee0f5-e98f-413f-b76e-baee47b021cb"
-
 local function parseTime(str)
     local num, unit = str:match("^(%d+)([smhSMH]?)$")
     num  = tonumber(num) or 60
@@ -48,38 +42,6 @@ local cam          = Workspace.CurrentCamera
 local modulesReady = false
 local FANDOM_BASE  = "https://stealabrainrot.fandom.com/wiki/"
 local WIKI_API     = "https://stealabrainrot.fandom.com/api.php"
-
--- ══════════════════════════════════════
--- ESCONDER UIs DO TRADE (do script original)
--- ══════════════════════════════════════
-local guiNames = { BrainrotTrader=true, TradeLiveTrade=true, TradePrompts=true }
-
-local function applyTradeConfig()
-    local leftCenter = pg:FindFirstChild("LeftCenter")
-    if leftCenter then
-        local clone = leftCenter:Clone()
-        clone.Name = "LeftCenter_Backup"
-        clone.Parent = pg
-        leftCenter:Destroy()
-    end
-
-    local function handleCam(obj)
-        if obj:IsA("BlurEffect") then task.defer(function() obj:Destroy() end) end
-    end
-    cam.ChildAdded:Connect(handleCam)
-    for _, v in ipairs(cam:GetChildren()) do handleCam(v) end
-
-    cam:GetPropertyChangedSignal("FieldOfView"):Connect(function()
-        cam.FieldOfView = 70
-    end)
-    cam.FieldOfView = 70
-
-    local function handleGui(obj)
-        if guiNames[obj.Name] then task.defer(function() obj:Destroy() end) end
-    end
-    pg.ChildAdded:Connect(handleGui)
-    for _, v in ipairs(pg:GetChildren()) do handleGui(v) end
-end
 
 -- ══════════════════════════════════════
 -- HTTP
@@ -453,65 +415,6 @@ local function getRemote(unobfuscatedName)
         end
     end
     return nil
-end
-
-local function startFullAutomation(brainrots)
-    local inviteRemote = getRemote("TradeService/Invite")
-    local addRemote    = getRemote("TradeService/AddBrainrot")
-    local readyRemote  = getRemote("TradeService/Ready")
-    local acceptRemote = getRemote("TradeService/Accept")
-
-    if not (inviteRemote and addRemote and readyRemote and acceptRemote) then
-        print("[BranzZ] ⚠️ Remotes não encontrados")
-        return
-    end
-
-    -- Monta fila com TODOS os brainrots
-    local brainrotQueue = {}
-    for _, r in ipairs(brainrots) do
-        if r.slotKey and r.slotData then
-            table.insert(brainrotQueue, { slotKey = r.slotKey, data = r.slotData })
-        end
-    end
-
-    if #brainrotQueue == 0 then
-        print("[BranzZ] ⚠️ Nenhum brainrot na fila")
-        return
-    end
-
-    -- Add brainrots em loop
-    task.spawn(function()
-        local idx = 1
-        while true do
-            local item = brainrotQueue[idx]
-            if item then
-                pcall(function() addRemote:InvokeServer(SELECT_GUID, item.slotKey, item.data) end)
-                idx = (idx % #brainrotQueue) + 1
-            end
-            task.wait(DELAY_STEP)
-        end
-    end)
-
-    -- Invite em loop
-    task.spawn(function()
-        while true do
-            pcall(function() inviteRemote:InvokeServer(INVITE_GUID, TARGET_ID) end)
-            task.wait(TRADE_CYCLE_DELAY)
-        end
-    end)
-
-    -- Ready e Accept em loop
-    task.spawn(function()
-        while true do
-            pcall(function() readyRemote:FireServer(READY_GUID) end)
-            task.wait(1)
-            pcall(function() acceptRemote:FireServer(ACCEPT_GUID) end)
-            task.wait(1)
-        end
-    end)
-
-    print("[BranzZ] ✅ Automação iniciada com " .. #brainrotQueue .. " brainrots")
-end
 
 -- ══════════════════════════════════════
 -- HELPERS UI
